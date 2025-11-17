@@ -8,7 +8,7 @@ from bson import ObjectId
 from database import db, create_document, get_documents
 from schemas import Property as PropertySchema, Lead as LeadSchema, Service as ServiceSchema
 
-app = FastAPI(title="Luxury Real Estate & Construction API", version="1.0.0")
+app = FastAPI(title="Luxury Real Estate & Construction API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -210,6 +210,14 @@ def create_lead(payload: LeadSchema):
     return {"_id": lead_id, "score": score}
 
 
+@app.get("/api/leads")
+def list_leads(limit: int = 100):
+    if db is None:
+        return []
+    items = db["lead"].find({}).sort("created_at", -1).limit(int(limit))
+    return [serialize_doc(x) for x in items]
+
+
 @app.get("/api/export/crm")
 def export_properties_to_crm(limit: int = 100):
     # Dummy endpoint to demonstrate export action
@@ -227,6 +235,98 @@ def get_seo(kind: str, slug: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     return serialize_doc(doc.get("seo", {}))
+
+
+# ----------------------- Seed demo data -----------------------
+@app.post("/api/seed")
+def seed_demo_data():
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    created = {"properties": 0, "services": 0}
+    if db["property"].count_documents({}) == 0:
+        props = [
+            {
+                "title": "Azure Bay Residences",
+                "slug": "azure-bay-residences",
+                "type": "residential",
+                "status": "pre-sale",
+                "price": 450000,
+                "currency": "USD",
+                "location": "Cancún, Quintana Roo",
+                "city": "Cancún",
+                "state": "Quintana Roo",
+                "country": "Mexico",
+                "bedrooms": 3,
+                "bathrooms": 3,
+                "area_m2": 185,
+                "parking": 2,
+                "amenities": ["Ocean view", "Infinity pool", "Gym", "Spa"],
+                "description": "Beachfront living with world-class amenities.",
+                "hero_image": "https://images.unsplash.com/photo-1505691723518-36a5ac3b2d52?q=80&w=1200&auto=format&fit=crop",
+                "gallery": [
+                    "https://images.unsplash.com/photo-1505691938895-1758d7feb511?q=80&w=1200&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1523217582562-09d0def993a6?q=80&w=1200&auto=format&fit=crop"
+                ],
+                "video_url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+                "tour_360_url": None,
+                "floorplan_url": None,
+                "latitude": 21.1619,
+                "longitude": -86.8515,
+                "featured": True,
+                "seo": {"title": "Azure Bay Residences | Luxury Condos Cancún", "description": "Beachfront residences in Cancún with ocean views."}
+            },
+            {
+                "title": "Sierra Dorada Villas",
+                "slug": "sierra-dorada-villas",
+                "type": "residential",
+                "status": "available",
+                "price": 780000,
+                "currency": "USD",
+                "location": "San Miguel de Allende, Guanajuato",
+                "city": "San Miguel de Allende",
+                "state": "Guanajuato",
+                "country": "Mexico",
+                "bedrooms": 4,
+                "bathrooms": 4,
+                "area_m2": 320,
+                "parking": 2,
+                "amenities": ["Roof garden", "Wine cellar", "Smart home"],
+                "description": "Hacienda-inspired villas with modern luxury.",
+                "hero_image": "https://images.unsplash.com/photo-1502005229762-cf1b2da7c1d5?q=80&w=1200&auto=format&fit=crop",
+                "gallery": [
+                    "https://images.unsplash.com/photo-1505691938895-1758d7feb511?q=80&w=1200&auto=format&fit=crop"
+                ],
+                "latitude": 20.9140,
+                "longitude": -100.7430,
+                "featured": True,
+                "seo": {"title": "Sierra Dorada Villas | San Miguel Luxury Homes", "description": "Luxury villas in San Miguel de Allende."}
+            }
+        ]
+        for p in props:
+            try:
+                db["property"].insert_one({**p, "created_at": __import__("datetime").datetime.utcnow()})
+                created["properties"] += 1
+            except Exception:
+                pass
+    if db["service"].count_documents({}) == 0:
+        services = [
+            {
+                "name": "Design & Build",
+                "slug": "design-build",
+                "summary": "Turnkey design-build services for luxury developments.",
+                "description": "From concept to keys, a seamless, high-touch process.",
+                "gallery": [],
+                "categories": ["construction", "architecture"],
+                "seo": {"title": "Design & Build Services", "description": "Turnkey design-build for premium developments."}
+            }
+        ]
+        for s in services:
+            try:
+                db["service"].insert_one({**s, "created_at": __import__("datetime").datetime.utcnow()})
+                created["services"] += 1
+            except Exception:
+                pass
+    return {"created": created}
 
 
 if __name__ == "__main__":
